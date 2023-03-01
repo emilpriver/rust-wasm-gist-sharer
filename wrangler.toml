@@ -1,0 +1,13 @@
+name = "" # todo
+main = "build/worker/shim.mjs"
+compatibility_date = "2022-01-20"
+
+kv_namespaces = [
+  { binding = "code_paste", preview_id = "136b6450fb5844639499618ba5ee3ba1", id = "52f34c777365486f99246aa5b23bad39" }
+]
+
+[vars]
+WORKERS_RS_VERSION = "0.0.11"
+
+[build]
+command = "cargo install -q worker-build --version 0.0.7 && worker-build --release"
