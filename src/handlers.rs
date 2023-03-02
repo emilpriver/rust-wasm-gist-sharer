@@ -1,10 +1,14 @@
-use crate::types;
+use crate::{
+    types,
+    utils::{get_code_template, syntax_highlight_code},
+};
 use rand::{distributions::Alphanumeric, Rng};
 use std::result::Result;
+use tinytemplate::TinyTemplate;
 use worker::*;
 
 pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Response, Error> {
-    let json = req.json::<types::CodePasteInput>().await?;
+    let form = req.form_data().await?;
 
     let code_paste_kv = ctx.kv("code_paste")?;
 
@@ -14,50 +18,109 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
         .map(char::from)
         .collect();
 
-    let language = json.language.to_string();
+    let code = match form.get("content").unwrap() {
+        FormEntry::File(file) => {
+            let bytes = file.bytes().await?;
+
+            match String::from_utf8(bytes) {
+                Ok(v) => v,
+                Err(e) => {
+                    console_error!("Invalid UTF-8 sequence: {}", e);
+
+                    return Response::from_json(&types::JsonResponse {
+                        message: "couldn't parse file".to_string(),
+                    })
+                    .map(|res| res.with_status(400));
+                }
+            }
+        }
+        FormEntry::Field(c) => c.to_string(),
+    };
+    let language = match form.get("language").unwrap() {
+        FormEntry::File(..) => {
+            return Response::from_json(&types::JsonResponse {
+                message: "expected 'language' to be a string".to_string(),
+            })
+            .map(|res| res.with_status(400));
+        }
+        FormEntry::Field(c) => c.to_string(),
+    };
+
     let code_paste_id = format!("{}.{}", id.to_string(), language);
 
     match code_paste_kv
-        .put(code_paste_id.as_str(), json.code.to_string())?
+        .put(code_paste_id.as_str(), code)?
         .execute()
         .await
     {
-        Ok(..) => Response::redirect(
-            format!("http://localhost:8787/{}", code_paste_id.as_str())
-                .parse()
-                .unwrap(),
-        ),
+        Ok(..) => {
+            let _mime_json = "application/json".to_string();
+            match req.headers().get("accept").unwrap() {
+                Some(_mime_json) => Response::from_json(&types::CodePaseResponse {
+                    permalink: format!("http://paste.priver.dev/{}", code_paste_id.as_str()),
+                    id: code_paste_id.to_string(),
+                }),
+                _ => Response::redirect(
+                    format!("http://paste.priver.dev/{}", code_paste_id.as_str())
+                        .parse()
+                        .unwrap(),
+                ),
+            }
+        }
         Err(err) => {
             console_error!("error posting data to KV: {:?}", err.to_string());
             Response::from_json(&types::JsonResponse {
                 message: "couldn't add pase to database".to_string(),
             })
+            .map(|res| res.with_status(400))
         }
     }
 }
 
-pub async fn get_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Response, Error> {
+pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Response, Error> {
     if let None = ctx.param("id") {
         return Response::from_json(&types::JsonResponse {
             message: "missing id".to_string(),
-        });
+        })
+        .map(|res| res.with_status(404));
     };
 
     let id = ctx.param("id").unwrap();
 
-    let code_paste_kv = ctx.kv("code_paste")?;
+    let code_paste_kv = match ctx.kv("code_paste") {
+        Ok(value) => value,
+        Err(err) => {
+            console_error!("error reading kv: {:?}", err.to_string());
+            return Response::from_json(&types::JsonResponse {
+                message: "missing id".to_string(),
+            })
+            .map(|res| res.with_status(404));
+        }
+    };
+
     match code_paste_kv.get(id).text().await {
-        Ok(value) => {
+        Ok(Some(value)) => {
             let mut headers: http::HeaderMap = Headers::new().into();
             headers.append("Cache-Control", "max-age=2629746".parse().unwrap());
 
-            Response::ok(value.unwrap()).map(|res| res.with_headers(headers.into()))
+            if use_raw_format {
+                return Response::ok(value).map(|res| res.with_headers(headers.into()));
+            }
+
+            let rendered = syntax_highlight_code(value.clone(), "rust".to_string());
+
+            Response::ok(rendered).map(|res| res.with_headers(headers.into()))
         }
+        Ok(None) => Response::from_json(&types::JsonResponse {
+            message: "missing id".to_string(),
+        })
+        .map(|res| res.with_status(404)),
         Err(err) => {
             console_error!("error reading kv data: {:?}", err.to_string());
             Response::from_json(&types::JsonResponse {
                 message: "missing id".to_string(),
             })
+            .map(|res| res.with_status(404))
         }
     }
 }

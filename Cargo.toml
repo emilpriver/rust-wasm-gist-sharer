@@ -19,6 +19,9 @@ getrandom = { version = "0.2.8", features = ["js"] }
 serde = { version = "1.0.152", features = ["derive", "serde_derive"] }
 anyhow = "1.0.69"
 http = "0.2.9"
+tinytemplate = "1.2.1"
+mime = "0.3.16"
+syntect = {version = "5.0.0", default-features = false, features = ["default-fancy"]}
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
