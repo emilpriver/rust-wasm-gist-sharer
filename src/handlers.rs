@@ -18,8 +18,8 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
         .map(char::from)
         .collect();
 
-    let code = match form.get("content").unwrap() {
-        FormEntry::File(file) => {
+    let code = match form.get("content") {
+        Some(FormEntry::File(file)) => {
             let bytes = file.bytes().await?;
 
             match String::from_utf8(bytes) {
@@ -34,16 +34,29 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
                 }
             }
         }
-        FormEntry::Field(c) => c.to_string(),
+        Some(FormEntry::Field(c)) => c.to_string(),
+        None => {
+            return Response::from_json(&types::JsonResponse {
+                message: "missing 'content' field".to_string(),
+            })
+            .map(|res| res.with_status(400))
+        }
     };
-    let language = match form.get("language").unwrap() {
-        FormEntry::File(..) => {
+
+    let language = match form.get("language") {
+        Some(FormEntry::File(..)) => {
             return Response::from_json(&types::JsonResponse {
                 message: "expected 'language' to be a string".to_string(),
             })
             .map(|res| res.with_status(400));
         }
-        FormEntry::Field(c) => c.to_string(),
+        Some(FormEntry::Field(c)) => c.to_string().replace(" ", "-"),
+        None => {
+            return Response::from_json(&types::JsonResponse {
+                message: "missing 'language' field".to_string(),
+            })
+            .map(|res| res.with_status(400))
+        }
     };
 
     let code_paste_id = format!("{}.{}", id.to_string(), language);
@@ -107,7 +120,9 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
                 return Response::ok(value).map(|res| res.with_headers(headers.into()));
             }
 
-            let rendered = syntax_highlight_code(value.clone(), "rust".to_string());
+            let (_, language) = id.split_once(".").unwrap();
+
+            let rendered = syntax_highlight_code(value.clone(), language.to_string());
 
             Response::ok(rendered).map(|res| res.with_headers(headers.into()))
         }

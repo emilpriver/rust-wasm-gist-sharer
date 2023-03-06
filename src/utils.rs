@@ -15,7 +15,7 @@ cfg_if! {
 }
 
 pub fn get_code_template() -> String {
-    let contents = r#"
+    r#"
       <html>
         <head>
             <title> {lang} code </title>
@@ -25,9 +25,7 @@ pub fn get_code_template() -> String {
         </body>
     </html>
     "#
-    .to_string();
-
-    contents
+    .to_string()
 }
 
 pub fn syntax_highlight_code(code: String, lang: String) -> String {
@@ -35,9 +33,7 @@ pub fn syntax_highlight_code(code: String, lang: String) -> String {
     let ts = ThemeSet::load_defaults();
 
     let theme = &ts.themes["Solarized (dark)"];
-    let sr = ss
-        .find_syntax_by_extension(map_lang_to_extension(&lang).as_str())
-        .unwrap();
+    let sr = ss.find_syntax_by_extension(lang.as_str()).unwrap();
 
     let syntax_code = highlighted_html_for_string(code.as_str(), &ss, &sr, theme).unwrap();
 
@@ -45,11 +41,4 @@ pub fn syntax_highlight_code(code: String, lang: String) -> String {
         .replace("{code}", syntax_code.as_str())
         .replace("{lang}", lang.as_str())
         .to_string()
-}
-
-pub fn map_lang_to_extension(lang: &String) -> String {
-    match lang.to_lowercase().as_str() {
-        "rust" => "rs".to_string(),
-        _ => "rs".to_string(),
-    }
 }
