@@ -1,10 +1,10 @@
 use crate::{
     types,
-    utils::{get_code_template, syntax_highlight_code},
+    utils::{syntax_highlight_code},
 };
 use rand::{distributions::Alphanumeric, Rng};
 use std::result::Result;
-use tinytemplate::TinyTemplate;
+
 use worker::*;
 
 pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Response, Error> {
