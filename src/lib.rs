@@ -24,15 +24,19 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
 
     router
         .get("/", |_, _| Response::ok("Hello from Workers!"))
+        .post_async("/", |req, ctx| async move {
+            handlers::create_paste(req, ctx).await
+        })
         .get_async("/raw/:id", |_, ctx| async move {
             handlers::get_paste(ctx, true).await
         })
         .get_async("/:id", |_, ctx| async move {
             handlers::get_paste(ctx, false).await
         })
-        .post_async("/post", |req, ctx| async move {
-            handlers::create_paste(req, ctx).await
-        })
+        .delete_async(
+            "/:id",
+            |_, ctx| async move { handlers::delete_paste(ctx).await },
+        )
         .run(req, env)
         .await
 }

@@ -139,3 +139,41 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
         }
     }
 }
+
+pub async fn delete_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
+    if let None = ctx.param("id") {
+        return Response::from_json(&types::JsonResponse {
+            message: "missing id".to_string(),
+        })
+        .map(|res| res.with_status(404));
+    };
+
+    let id = ctx.param("id").unwrap();
+
+    let code_paste_kv = match ctx.kv("code_paste") {
+        Ok(value) => value,
+        Err(err) => {
+            console_error!("error reading kv: {:?}", err.to_string());
+            return Response::from_json(&types::JsonResponse {
+                message: "missing id".to_string(),
+            })
+            .map(|res| res.with_status(404));
+        }
+    };
+
+    match code_paste_kv.delete(id).await {
+        Ok(..) => {
+            return Response::from_json(&types::JsonResponse {
+                message: "deleted".to_string(),
+            })
+            .map(|res| res.with_status(200))
+        }
+        Err(err) => {
+            console_error!("error deleting from KV: {:?}", err.to_string());
+            return Response::from_json(&types::JsonResponse {
+                message: "missing id".to_string(),
+            })
+            .map(|res| res.with_status(404));
+        }
+    }
+}
