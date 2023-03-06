@@ -34,7 +34,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
                 }
             }
         }
-        Some(FormEntry::Field(c)) => c.to_string(),
+        Some(FormEntry::Field(c)) => c,
         None => {
             return Response::from_json(&types::JsonResponse {
                 message: "missing 'content' field".to_string(),
@@ -50,7 +50,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
             })
             .map(|res| res.with_status(400));
         }
-        Some(FormEntry::Field(c)) => c.to_string().replace(" ", "-"),
+        Some(FormEntry::Field(c)) => c.replace(' ', "-"),
         None => {
             return Response::from_json(&types::JsonResponse {
                 message: "missing 'language' field".to_string(),
@@ -59,7 +59,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
         }
     };
 
-    let code_paste_id = format!("{}.{}", id.to_string(), language);
+    let code_paste_id = format!("{}.{}", id, language);
 
     match code_paste_kv
         .put(code_paste_id.as_str(), code)?
@@ -91,7 +91,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
 }
 
 pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Response, Error> {
-    if let None = ctx.param("id") {
+    if ctx.param("id").is_none() {
         return Response::from_json(&types::JsonResponse {
             message: "missing id".to_string(),
         })
@@ -120,9 +120,9 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
                 return Response::ok(value).map(|res| res.with_headers(headers.into()));
             }
 
-            let (_, language) = id.split_once(".").unwrap();
+            let (_, language) = id.split_once('.').unwrap();
 
-            let rendered = syntax_highlight_code(value.clone(), language.to_string());
+            let rendered = syntax_highlight_code(value, language.to_string());
 
             Response::ok(rendered).map(|res| res.with_headers(headers.into()))
         }
@@ -141,7 +141,7 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
 }
 
 pub async fn delete_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
-    if let None = ctx.param("id") {
+    if ctx.param("id").is_none() {
         return Response::from_json(&types::JsonResponse {
             message: "missing id".to_string(),
         })
@@ -163,17 +163,17 @@ pub async fn delete_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
 
     match code_paste_kv.delete(id).await {
         Ok(..) => {
-            return Response::from_json(&types::JsonResponse {
+            Response::from_json(&types::JsonResponse {
                 message: "deleted".to_string(),
             })
             .map(|res| res.with_status(200))
         }
         Err(err) => {
             console_error!("error deleting from KV: {:?}", err.to_string());
-            return Response::from_json(&types::JsonResponse {
+            Response::from_json(&types::JsonResponse {
                 message: "missing id".to_string(),
             })
-            .map(|res| res.with_status(404));
+            .map(|res| res.with_status(404))
         }
     }
 }

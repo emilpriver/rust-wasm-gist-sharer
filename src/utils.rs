@@ -35,10 +35,10 @@ pub fn syntax_highlight_code(code: String, lang: String) -> String {
     let theme = &ts.themes["Solarized (dark)"];
     let sr = ss.find_syntax_by_extension(lang.as_str()).unwrap();
 
-    let syntax_code = highlighted_html_for_string(code.as_str(), &ss, &sr, theme).unwrap();
+    let syntax_code = highlighted_html_for_string(code.as_str(), &ss, sr, theme).unwrap();
 
     get_code_template()
         .replace("{code}", syntax_code.as_str())
         .replace("{lang}", lang.as_str())
-        .to_string()
+        
 }
