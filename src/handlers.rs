@@ -1,7 +1,4 @@
-use crate::{
-    types,
-    utils::{syntax_highlight_code},
-};
+use crate::{types, utils::syntax_highlight_code};
 use rand::{distributions::Alphanumeric, Rng};
 use std::result::Result;
 
@@ -50,7 +47,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
             })
             .map(|res| res.with_status(400));
         }
-        Some(FormEntry::Field(c)) => c.replace(' ', "-"),
+        Some(FormEntry::Field(c)) => c,
         None => {
             return Response::from_json(&types::JsonResponse {
                 message: "missing 'language' field".to_string(),
@@ -59,26 +56,28 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
         }
     };
 
-    let code_paste_id = format!("{}.{}", id, language);
-
-    match code_paste_kv
-        .put(code_paste_id.as_str(), code)?
-        .execute()
-        .await
-    {
+    match code_paste_kv.put(id.as_str(), code)?.execute().await {
         Ok(..) => {
             let _mime_json = "application/json".to_string();
-            match req.headers().get("accept").unwrap() {
-                Some(_mime_json) => Response::from_json(&types::CodePaseResponse {
-                    permalink: format!("http://paste.priver.dev/{}", code_paste_id.as_str()),
-                    id: code_paste_id.to_string(),
-                }),
-                _ => Response::redirect(
-                    format!("http://paste.priver.dev/{}", code_paste_id.as_str())
-                        .parse()
-                        .unwrap(),
-                ),
+            let accept = req.headers().get("accept").unwrap();
+
+            if accept.unwrap() == _mime_json {
+                return Response::from_json(&types::CodePaseResponse {
+                    permalink: format!("http://paste.priver.dev/{}", id.as_str()),
+                    id: id.to_string(),
+                });
             }
+
+            let language = match form.get("language") {
+                Some(FormEntry::Field(c)) => format!(".{}", c),
+                __ => "".to_string(),
+            };
+
+            Response::redirect(
+                format!("http://paste.priver.dev/{}{}", id.as_str(), language)
+                    .parse()
+                    .unwrap(),
+            )
         }
         Err(err) => {
             console_error!("error posting data to KV: {:?}", err.to_string());
@@ -90,7 +89,7 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     }
 }
 
-pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Response, Error> {
+pub async fn get_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
     if ctx.param("id").is_none() {
         return Response::from_json(&types::JsonResponse {
             message: "missing id".to_string(),
@@ -98,7 +97,9 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
         .map(|res| res.with_status(404));
     };
 
-    let id = ctx.param("id").unwrap();
+    let param: Vec<&str> = ctx.param("id").unwrap().split(".").collect();
+    let id = param[0];
+    console_log!("{}", id);
 
     let code_paste_kv = match ctx.kv("code_paste") {
         Ok(value) => value,
@@ -116,15 +117,27 @@ pub async fn get_paste(ctx: RouteContext<()>, use_raw_format: bool) -> Result<Re
             let mut headers: http::HeaderMap = Headers::new().into();
             headers.append("Cache-Control", "max-age=2629746".parse().unwrap());
 
-            if use_raw_format {
-                return Response::ok(value).map(|res| res.with_headers(headers.into()));
+            match param.len() > 1 {
+                true => {
+                    let ext = param[1];
+
+                    let rendered = match syntax_highlight_code(value, ext.to_string()) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            console_log!("{:?}", error);
+                            return Response::from_json(&types::JsonResponse {
+                                message: "couldn't syntax highlight code".to_string(),
+                            })
+                            .map(|res| res.with_status(500));
+                        }
+                    };
+
+                    return Response::ok(rendered).map(|res| res.with_headers(headers.into()));
+                }
+                false => {
+                    return Response::ok(value).map(|res| res.with_headers(headers.into()));
+                }
             }
-
-            let (_, language) = id.split_once('.').unwrap();
-
-            let rendered = syntax_highlight_code(value, language.to_string());
-
-            Response::ok(rendered).map(|res| res.with_headers(headers.into()))
         }
         Ok(None) => Response::from_json(&types::JsonResponse {
             message: "missing id".to_string(),
@@ -162,12 +175,10 @@ pub async fn delete_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
     };
 
     match code_paste_kv.delete(id).await {
-        Ok(..) => {
-            Response::from_json(&types::JsonResponse {
-                message: "deleted".to_string(),
-            })
-            .map(|res| res.with_status(200))
-        }
+        Ok(..) => Response::from_json(&types::JsonResponse {
+            message: "deleted".to_string(),
+        })
+        .map(|res| res.with_status(200)),
         Err(err) => {
             console_error!("error deleting from KV: {:?}", err.to_string());
             Response::from_json(&types::JsonResponse {
