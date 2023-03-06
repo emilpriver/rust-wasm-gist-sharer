@@ -105,6 +105,7 @@ pub async fn get_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
         Ok(Some(value)) => {
             let mut headers: http::HeaderMap = Headers::new().into();
             headers.append("Cache-Control", "max-age=2629746".parse().unwrap());
+            headers.append("Content-Type", "text/html".parse().unwrap());
 
             match param.len() > 1 {
                 true => {

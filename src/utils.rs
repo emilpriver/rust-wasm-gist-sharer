@@ -52,6 +52,11 @@ pub fn syntax_highlight_code(code: String, lang: String) -> Result<String> {
 
 pub fn get_web_template() -> String {
     r#"
+    <html>
+    <head>
+        <title> Priver.dev paste </title>
+    </head>
+    <body>
 <form method="post" action="/">
            <textarea name="content" rows="30" maxlength="393216" \="" placeholder="Paste your code here..." cols="80"></textarea>
            <br>
@@ -521,6 +526,8 @@ pub fn get_web_template() -> String {
            <br>
            <input type="submit" value="Paste!">
         </form>
+        </body>
+        </html>
 
     "#.to_string()
 }

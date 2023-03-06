@@ -26,6 +26,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .get("/", |_, _| {
             let mut headers: http::HeaderMap = Headers::new().into();
             headers.append("Cache-Control", "max-age=2629746".parse().unwrap());
+            headers.append("Content-Type", "text/html".parse().unwrap());
 
             let rendered = utils::get_web_template();
 
