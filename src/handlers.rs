@@ -40,28 +40,15 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
         }
     };
 
-    let language = match form.get("language") {
-        Some(FormEntry::File(..)) => {
-            return Response::from_json(&types::JsonResponse {
-                message: "expected 'language' to be a string".to_string(),
-            })
-            .map(|res| res.with_status(400));
-        }
-        Some(FormEntry::Field(c)) => c,
-        None => {
-            return Response::from_json(&types::JsonResponse {
-                message: "missing 'language' field".to_string(),
-            })
-            .map(|res| res.with_status(400))
-        }
-    };
-
     match code_paste_kv.put(id.as_str(), code)?.execute().await {
         Ok(..) => {
             let _mime_json = "application/json".to_string();
-            let accept = req.headers().get("accept").unwrap();
+            let accept = match req.headers().get("accept") {
+                Ok(Some(value)) => value,
+                _ => "".to_string(),
+            };
 
-            if accept.unwrap() == _mime_json {
+            if accept == _mime_json {
                 return Response::from_json(&types::CodePaseResponse {
                     permalink: format!("http://paste.priver.dev/{}", id.as_str()),
                     id: id.to_string(),
@@ -90,14 +77,16 @@ pub async fn create_paste(mut req: Request, ctx: RouteContext<()>) -> Result<Res
 }
 
 pub async fn get_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
-    if ctx.param("id").is_none() {
-        return Response::from_json(&types::JsonResponse {
-            message: "missing id".to_string(),
-        })
-        .map(|res| res.with_status(404));
+    let param: Vec<&str> = match ctx.param("id") {
+        Some(value) => value.split(".").collect(),
+        None => {
+            return Response::from_json(&types::JsonResponse {
+                message: "missing id".to_string(),
+            })
+            .map(|res| res.with_status(404));
+        }
     };
 
-    let param: Vec<&str> = ctx.param("id").unwrap().split(".").collect();
     let id = param[0];
     console_log!("{}", id);
 
@@ -154,14 +143,15 @@ pub async fn get_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
 }
 
 pub async fn delete_paste(ctx: RouteContext<()>) -> Result<Response, Error> {
-    if ctx.param("id").is_none() {
-        return Response::from_json(&types::JsonResponse {
-            message: "missing id".to_string(),
-        })
-        .map(|res| res.with_status(404));
+    let id = match ctx.param("id") {
+        Some(value) => value,
+        None => {
+            return Response::from_json(&types::JsonResponse {
+                message: "missing id".to_string(),
+            })
+            .map(|res| res.with_status(404));
+        }
     };
-
-    let id = ctx.param("id").unwrap();
 
     let code_paste_kv = match ctx.kv("code_paste") {
         Ok(value) => value,
